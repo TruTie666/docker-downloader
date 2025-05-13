@@ -4,55 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       image_name:
-        description: 'Parte del nombre de la imagen Docker (por ejemplo, "oracle")'
+        description: 'Nombre de la imagen Docker (e.g. ubuntu:22.04)'
         required: true
-        default: 'ubuntu'
+        default: 'ubuntu:22.04'
 
 jobs:
   save-docker-image:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Buscar imágenes Docker que coincidan
-        id: search_images
-        run: |
-          # Buscar imágenes en Docker Hub que contengan el texto ingresado
-          SEARCH_TERM="${{ github.event.inputs.image_name }}"
-          echo "Buscando imagenes que contienen: $SEARCH_TERM"
-          # Se obtiene la primera que contiene el término
-          IMAGE_NAME=$(curl -s "https://hub.docker.com/v2/repositories/library/?page_size=100" | \
-            jq -r --arg term "$SEARCH_TERM" '
-              .results[] | select(.name | test($term; "i")) | .name' | head -n 1)
-          if [ -z "$IMAGE_NAME" ]; then
-            echo "No se encontró ninguna imagen que coincida con '$SEARCH_TERM'"
-            exit 1
-          fi
-          echo "Imagen encontrada: $IMAGE_NAME"
-          echo "image_name=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Mostrar imagen que se usará
-        run: echo "Descargando la imagen: ${{ steps.search_images.outputs.image_name }}"
+      - name: Mostrar imagen solicitada
+        run: echo "Descargando imagen ${{ github.event.inputs.image_name }}"
 
       - name: Descargar imagen Docker
-        run: |
-          # Usar la imagen encontrada, agregando el namespace si no tiene
-          IMAGE_TO_PULL="${{ steps.search_images.outputs.image_name }}"
-          
-          # Si en la búsqueda no se incluyó el namespace (como 'oracle' en lugar de 'oracle/docker-image'), se asume que está en 'library'
-          if [[ "$IMAGE_TO_PULL" != *"/"* ]]; then
-            IMAGE_TO_PULL="library/$IMAGE_TO_PULL"
-          fi
-
-          docker pull "$IMAGE_TO_PULL"
-          echo "Imagen descargada: $IMAGE_TO_PULL"
+        run: docker pull ${{ github.event.inputs.image_name }}
 
       - name: Guardar imagen Docker en archivo
-        run: |
-          IMAGE_TO_SAVE="${{ steps.search_images.outputs.image_name }}"
-          if [[ "$IMAGE_TO_SAVE" != *"/"* ]]; then
-            IMAGE_TO_SAVE="library/$IMAGE_TO_SAVE"
-          fi
-          docker save "$IMAGE_TO_SAVE" | gzip > image.tar.gz
+        run: docker save ${{ github.event.inputs.image_name }} | gzip > image.tar.gz
 
       - name: Subir imagen como artifact
         uses: actions/upload-artifact@v4
